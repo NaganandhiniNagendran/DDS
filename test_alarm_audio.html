@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Alarm Audio Test</title>
+</head>
+<body>
+    <h1>Alarm Audio Test</h1>
+    
+    <audio id="alarm-sound" preload="auto">
+        <source src="/static/alarm.wav" type="audio/wav">
+    </audio>
+    
+    <audio id="gentle-alert-sound" preload="auto">
+        <source src="/static/gentle_alert.wav" type="audio/wav">
+    </audio>
+    
+    <button onclick="testAlarm()">Test Critical Alarm</button>
+    <button onclick="testGentle()">Test Gentle Alert</button>
+    <button onclick="testFallback()">Test Fallback Alarm</button>
+    
+    <div id="status"></div>
+    
+    <script>
+        let audioContext = null;
+        
+        function initAudioContext() {
+            if (!audioContext) {
+                try {
+                    audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                    if (audioContext.state === 'suspended') {
+                        audioContext.resume();
+                    }
+                    console.log('Audio context initialized');
+                } catch (e) {
+                    console.log('Audio context initialization failed:', e);
+                }
+            }
+        }
+        
+        function testAlarm() {
+            initAudioContext();
+            const alarmSound = document.getElementById('alarm-sound');
+            alarmSound.volume = 1.0;
+            alarmSound.currentTime = 0;
+            
+            alarmSound.play().then(() => {
+                document.getElementById('status').textContent = 'Critical alarm playing successfully!';
+                console.log('Critical alarm playing successfully');
+            }).catch(e => {
+                document.getElementById('status').textContent = 'Critical alarm failed, using fallback: ' + e;
+                console.log('Critical alarm play failed, using fallback:', e);
+                playFallbackAlarm();
+            });
+        }
+        
+        function testGentle() {
+            initAudioContext();
+            const gentleAlert = document.getElementById('gentle-alert-sound');
+            gentleAlert.volume = 1.0;
+            gentleAlert.currentTime = 0;
+            
+            gentleAlert.play().then(() => {
+                document.getElementById('status').textContent = 'Gentle alert playing successfully!';
+                console.log('Gentle alert playing successfully');
+            }).catch(e => {
+                document.getElementById('status').textContent = 'Gentle alert failed: ' + e;
+                console.log('Gentle alert play failed:', e);
+            });
+        }
+        
+        function playFallbackAlarm() {
+            if (!audioContext) {
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            }
+            
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+            
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+            
+            oscillator.frequency.value = 800;
+            oscillator.type = 'square';
+            
+            gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
+            
+            oscillator.start(audioContext.currentTime);
+            oscillator.stop(audioContext.currentTime + 0.5);
+            
+            document.getElementById('status').textContent = 'Playing fallback alarm sound';
+            console.log('Playing fallback alarm sound');
+        }
+    </script>
+</body>
+</html>

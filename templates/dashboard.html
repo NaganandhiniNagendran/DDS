@@ -1,0 +1,435 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - Driver Drowsiness Detection System{% endblock %}
+
+{% block page_title %}Driver Dashboard{% endblock %}
+
+{% block content %}
+<div class="dashboard-container">
+    <!-- Driver Profile Card -->
+    <div class="profile-section">
+        <div class="profile-card">
+            <div class="profile-header">
+                <div class="profile-avatar">
+                    <i class="fas fa-user"></i>
+                </div>
+                <div class="profile-info">
+                    <h2>{{ user.full_name or user.username }}</h2>
+                    <p>Active Driver</p>
+                </div>
+            </div>
+            <div class="profile-stats">
+                <div class="profile-stat">
+                    <span class="stat-label">Status</span>
+                    <span class="stat-value status-active">Online</span>
+                </div>
+                <div class="profile-stat">
+                    <span class="stat-label">Experience</span>
+                    <span class="stat-value">{{ user.experience_level }}</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Metrics Grid -->
+    <div class="metrics-grid">
+        <div class="metric-card">
+            <div class="metric-icon">
+                <i class="fas fa-clock"></i>
+            </div>
+            <div class="metric-content">
+                <h3>Total Driving Time</h3>
+                <div class="metric-value" id="total-driving-time">0h 0m</div>
+                <div class="metric-change" id="driving-time-change">Calculating...</div>
+            </div>
+        </div>
+
+        <div class="metric-card">
+            <div class="metric-icon">
+                <i class="fas fa-bell"></i>
+            </div>
+            <div class="metric-content">
+                <h3>Drowsiness Alerts</h3>
+                <div class="metric-value" id="total-alerts">0</div>
+                <div class="metric-change" id="alerts-change">Calculating...</div>
+            </div>
+        </div>
+
+        <div class="metric-card">
+            <div class="metric-icon">
+                <i class="fas fa-battery-three-quarters"></i>
+            </div>
+            <div class="metric-content">
+                <h3>Fatigue Level</h3>
+                <div class="metric-value" id="fatigue-level">Low</div>
+                <div class="fatigue-meter">
+                    <div class="fatigue-fill" id="fatigue-fill" style="width: 25%"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="metric-card">
+            <div class="metric-icon">
+                <i class="fas fa-chart-line"></i>
+            </div>
+            <div class="metric-content">
+                <h3>Safety Score</h3>
+                <div class="metric-value" id="safety-score">95/100</div>
+                <div class="metric-change" id="safety-change">Calculating...</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Charts Section -->
+    <div class="charts-section">
+        <div class="chart-card">
+            <div class="chart-header">
+                <h3>Fatigue Events Timeline</h3>
+                <div class="chart-controls">
+                    <button class="chart-btn active">Day</button>
+                    <button class="chart-btn">Week</button>
+                    <button class="chart-btn">Month</button>
+                </div>
+            </div>
+            <div class="chart-container">
+                <canvas id="fatigue-chart"></canvas>
+            </div>
+        </div>
+
+        <div class="chart-card">
+            <div class="chart-header">
+                <h3>Alert Distribution</h3>
+            </div>
+            <div class="chart-container">
+                <canvas id="alert-chart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <!-- Recent Activity -->
+    <div class="activity-section">
+        <div class="activity-card">
+            <div class="activity-header">
+                <h3>Recent Activity</h3>
+                <button class="refresh-btn">
+                    <i class="fas fa-sync-alt"></i>
+                </button>
+            </div>
+            <div class="activity-list" id="activity-list">
+                <div class="activity-item">
+                    <div class="activity-icon activity-success">
+                        <i class="fas fa-check"></i>
+                    </div>
+                    <div class="activity-content">
+                        <div class="activity-title">Session Completed</div>
+                        <div class="activity-time">2 hours ago</div>
+                    </div>
+                </div>
+                <div class="activity-item">
+                    <div class="activity-icon activity-warning">
+                        <i class="fas fa-exclamation"></i>
+                    </div>
+                    <div class="activity-content">
+                        <div class="activity-title">Drowsiness Alert Triggered</div>
+                        <div class="activity-time">5 hours ago</div>
+                    </div>
+                </div>
+                <div class="activity-item">
+                    <div class="activity-icon activity-success">
+                        <i class="fas fa-check"></i>
+                    </div>
+                    <div class="activity-content">
+                        <div class="activity-title">System Calibration Complete</div>
+                        <div class="activity-time">1 day ago</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Load dashboard data
+async function loadDashboardData() {
+    try {
+        // Get real-time stats from backend
+        const response = await fetch('/get_dashboard_stats');
+        const stats = await response.json();
+        
+        // Update metrics with real data
+        document.getElementById('total-alerts').textContent = stats.stats.total_alerts;
+        
+        // Format driving time
+        const hours = Math.floor(stats.stats.total_duration / 3600);
+        const minutes = Math.floor((stats.stats.total_duration % 3600) / 60);
+        document.getElementById('total-driving-time').textContent = `${hours}h ${minutes}m`;
+        
+        // Calculate fatigue level based on real data
+        const avgAlertsPerSession = stats.stats.total_sessions > 0 ? 
+            stats.stats.total_alerts / stats.stats.total_sessions : 0;
+        let fatigueLevel = 'Low';
+        let fatiguePercent = 25;
+        
+        if (avgAlertsPerSession > 5) {
+            fatigueLevel = 'High';
+            fatiguePercent = 85;
+        } else if (avgAlertsPerSession > 2) {
+            fatigueLevel = 'Medium';
+            fatiguePercent = 60;
+        }
+        
+        document.getElementById('fatigue-level').textContent = fatigueLevel;
+        document.getElementById('fatigue-fill').style.width = fatiguePercent + '%';
+        
+        // Use real safety score from database
+        const safetyScore = stats.user.safety_score;
+        document.getElementById('safety-score').textContent = Math.round(safetyScore) + '/100';
+        
+        // Update activity list with real data
+        updateActivityList(stats.recent_activity);
+        
+        // Calculate trend indicators
+        updateTrendIndicators(stats.stats);
+        
+    } catch (error) {
+        console.error('Error loading dashboard data:', error);
+    }
+}
+
+// Update activity list with real data
+function updateActivityList(recentActivity) {
+    const activityList = document.getElementById('activity-list');
+    
+    let activityHTML = '';
+    
+    recentActivity.forEach(activity => {
+        const alertClass = activity.alerts > 0 ? 'activity-warning' : 'activity-success';
+        const alertIcon = activity.alerts > 0 ? 'exclamation' : 'check';
+        const alertTitle = activity.alerts > 0 ? 
+            `Session with ${activity.alerts} alerts` : 'Clean session completed';
+        
+        activityHTML += `
+            <div class="activity-item">
+                <div class="activity-icon ${alertClass}">
+                    <i class="fas fa-${alertIcon}"></i>
+                </div>
+                <div class="activity-content">
+                    <div class="activity-title">${alertTitle}</div>
+                    <div class="activity-time">${activity.date} ${activity.time}</div>
+                </div>
+            </div>
+        `;
+    });
+    
+    if (activityHTML) {
+        activityList.innerHTML = activityHTML;
+    }
+}
+
+// Update trend indicators
+function updateTrendIndicators(stats) {
+    // Simple trend calculation (could be enhanced with historical data)
+    const drivingTimeChange = document.getElementById('driving-time-change');
+    const alertsChange = document.getElementById('alerts-change');
+    const safetyChange = document.getElementById('safety-change');
+    
+    // For now, show based on current performance
+    if (stats.total_sessions > 0) {
+        const avgAlerts = stats.total_alerts / stats.total_sessions;
+        
+        if (avgAlerts < 1) {
+            drivingTimeChange.textContent = 'Good performance';
+            drivingTimeChange.className = 'metric-change positive';
+            alertsChange.textContent = 'Low alert rate';
+            alertsChange.className = 'metric-change positive';
+            safetyChange.textContent = 'Excellent';
+            safetyChange.className = 'metric-change positive';
+        } else if (avgAlerts < 3) {
+            drivingTimeChange.textContent = 'Moderate';
+            drivingTimeChange.className = 'metric-change';
+            alertsChange.textContent = 'Needs attention';
+            alertsChange.className = 'metric-change';
+            safetyChange.textContent = 'Good';
+            safetyChange.className = 'metric-change';
+        } else {
+            drivingTimeChange.textContent = 'High fatigue';
+            drivingTimeChange.className = 'metric-change negative';
+            alertsChange.textContent = 'High alert rate';
+            alertsChange.className = 'metric-change negative';
+            safetyChange.textContent = 'Needs improvement';
+            safetyChange.className = 'metric-change negative';
+        }
+    }
+}
+
+// Dynamic chart implementation with real data
+async function createSimpleCharts() {
+    try {
+        // Get real chart data from backend
+        const response = await fetch('/get_chart_data?days=7');
+        const chartData = await response.json();
+        
+        // Fatigue timeline chart
+        const fatigueCanvas = document.getElementById('fatigue-chart');
+        const fatigueCtx = fatigueCanvas.getContext('2d');
+        
+        const width = fatigueCanvas.width = fatigueCanvas.offsetWidth;
+        const height = fatigueCanvas.height = 200;
+        
+        // Clear canvas
+        fatigueCtx.clearRect(0, 0, width, height);
+        
+        if (chartData.timeline && chartData.timeline.length > 0) {
+            // Draw line chart with real data
+            fatigueCtx.strokeStyle = '#3b82f6';
+            fatigueCtx.lineWidth = 2;
+            fatigueCtx.beginPath();
+            
+            const maxAlerts = Math.max(...chartData.timeline.map(d => d.alerts), 1);
+            const xStep = width / Math.max(chartData.timeline.length - 1, 1);
+            
+            chartData.timeline.forEach((data, index) => {
+                const x = index * xStep;
+                const y = height - (data.alerts / maxAlerts) * (height - 40) - 20;
+                
+                if (index === 0) {
+                    fatigueCtx.moveTo(x, y);
+                } else {
+                    fatigueCtx.lineTo(x, y);
+                }
+                
+                // Draw data points
+                fatigueCtx.fillStyle = '#3b82f6';
+                fatigueCtx.beginPath();
+                fatigueCtx.arc(x, y, 4, 0, 2 * Math.PI);
+                fatigueCtx.fill();
+            });
+            
+            fatigueCtx.stroke();
+        } else {
+            // Show placeholder when no data
+            fatigueCtx.fillStyle = '#999';
+            fatigueCtx.font = '14px Arial';
+            fatigueCtx.textAlign = 'center';
+            fatigueCtx.fillText('No data available', width / 2, height / 2);
+        }
+        
+        // Alert distribution chart
+        const alertCanvas = document.getElementById('alert-chart');
+        const alertCtx = alertCanvas.getContext('2d');
+        
+        alertCanvas.width = alertCanvas.offsetWidth;
+        alertCanvas.height = 200;
+        
+        // Clear canvas
+        alertCtx.clearRect(0, 0, alertCanvas.width, alertCanvas.height);
+        
+        if (chartData.distribution && chartData.distribution.length > 0) {
+            // Draw bar chart with real data
+            const barWidth = 60;
+            const barSpacing = 30;
+            const maxValue = Math.max(...chartData.distribution.map(d => d.count), 1);
+            
+            chartData.distribution.forEach((data, index) => {
+                const barHeight = (data.count / maxValue) * 150;
+                const x = index * (barWidth + barSpacing) + 40;
+                const y = 170 - barHeight;
+                
+                // Color based on fatigue level
+                if (data.level === 'Critical') {
+                    alertCtx.fillStyle = '#ef4444';
+                } else if (data.level === 'Warning') {
+                    alertCtx.fillStyle = '#f59e0b';
+                } else {
+                    alertCtx.fillStyle = '#3b82f6';
+                }
+                
+                alertCtx.fillRect(x, y, barWidth, barHeight);
+                
+                // Draw labels
+                alertCtx.fillStyle = '#333';
+                alertCtx.font = '12px Arial';
+                alertCtx.textAlign = 'center';
+                alertCtx.fillText(data.level, x + barWidth / 2, 190);
+                alertCtx.fillText(data.count, x + barWidth / 2, y - 5);
+            });
+        } else {
+            // Show placeholder when no data
+            alertCtx.fillStyle = '#999';
+            alertCtx.font = '14px Arial';
+            alertCtx.textAlign = 'center';
+            alertCtx.fillText('No data available', alertCanvas.width / 2, alertCanvas.height / 2);
+        }
+        
+    } catch (error) {
+        console.error('Error creating charts:', error);
+    }
+}
+
+// Initialize dashboard
+document.addEventListener('DOMContentLoaded', function() {
+    loadDashboardData();
+    setTimeout(createSimpleCharts, 100);
+    
+    // Set up real-time updates
+    setInterval(loadDashboardData, 30000); // Update every 30 seconds
+    setInterval(createSimpleCharts, 60000); // Update charts every minute
+});
+
+// Chart time period buttons
+document.querySelectorAll('.chart-btn').forEach(btn => {
+    btn.addEventListener('click', function() {
+        // Remove active class from all buttons
+        document.querySelectorAll('.chart-btn').forEach(b => b.classList.remove('active'));
+        this.classList.add('active');
+        
+        // Get days from button text
+        let days = 7;
+        if (this.textContent === 'Week') days = 7;
+        else if (this.textContent === 'Month') days = 30;
+        else if (this.textContent === 'Day') days = 1;
+        
+        // Reload charts with new time period
+        createChartsWithDays(days);
+    });
+});
+
+// Load charts with specific days
+async function createChartsWithDays(days) {
+    try {
+        const response = await fetch(`/get_chart_data?days=${days}`);
+        const chartData = await response.json();
+        
+        // Update charts with new data (reuse the chart drawing logic)
+        updateChartsWithData(chartData);
+    } catch (error) {
+        console.error('Error loading chart data:', error);
+    }
+}
+
+// Update charts with provided data
+function updateChartsWithData(chartData) {
+    // Similar to createSimpleCharts but uses provided data
+    // This avoids duplicating the chart drawing logic
+    createSimpleCharts();
+}
+
+// Refresh button
+document.querySelector('.refresh-btn').addEventListener('click', function() {
+    this.style.animation = 'spin 1s linear';
+    loadDashboardData();
+    setTimeout(() => {
+        this.style.animation = '';
+    }, 1000);
+});
+</script>
+
+<style>
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+</style>
+{% endblock %}

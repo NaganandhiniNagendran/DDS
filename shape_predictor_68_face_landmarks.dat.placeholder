@@ -1,0 +1,18 @@
+# Dlib 68-point Facial Landmark Model
+# 
+# IMPORTANT: This is a placeholder file. You need to download the actual model file.
+#
+# Download the model from:
+# http://dlib.net/files/shape_predictor_68_face_landmarks.dat.bz2
+#
+# After downloading:
+# 1. Extract the .bz2 file to get shape_predictor_68_face_landmarks.dat
+# 2. Place it in the project root directory (same location as this file)
+# 3. Remove this placeholder file
+#
+# The model file is approximately 95MB when extracted.
+# This is required for the facial landmark detection functionality.
+#
+# Alternative download sources:
+# - https://github.com/italojs/facial-landmarks-recognition/blob/master/shape_predictor_68_face_landmarks.dat
+# - https://github.com/PyImageSearch/imutils/blob/master/examples/shape_predictor_68_face_landmarks.dat

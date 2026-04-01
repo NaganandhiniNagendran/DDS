@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Driver Drowsiness Detection System{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar -->
+        <div class="sidebar">
+            <div class="sidebar-header">
+                <i class="fas fa-car"></i>
+                <h2>DDDS</h2>
+            </div>
+            <nav class="sidebar-nav">
+                <a href="/" class="nav-item {% if request.endpoint == 'index' %}active{% endif %}">
+                    <i class="fas fa-home"></i>
+                    <span>Home</span>
+                </a>
+                <a href="/detection" class="nav-item {% if request.endpoint == 'detection' %}active{% endif %}">
+                    <i class="fas fa-video"></i>
+                    <span>Detection</span>
+                </a>
+                <a href="/dashboard" class="nav-item {% if request.endpoint == 'dashboard' %}active{% endif %}">
+                    <i class="fas fa-tachometer-alt"></i>
+                    <span>Dashboard</span>
+                </a>
+                <a href="/history" class="nav-item {% if request.endpoint == 'history' %}active{% endif %}">
+                    <i class="fas fa-history"></i>
+                    <span>History</span>
+                </a>
+                <a href="/settings" class="nav-item {% if request.endpoint == 'settings' %}active{% endif %}">
+                    <i class="fas fa-cog"></i>
+                    <span>Settings</span>
+                </a>
+            </nav>
+        </div>
+
+        <!-- Main Content -->
+        <div class="main-content">
+            <!-- Header -->
+            <header class="header">
+                <div class="header-left">
+                    <h1>{% block page_title %}Driver Drowsiness Detection System{% endblock %}</h1>
+                </div>
+                <div class="header-right">
+                    <div class="status-indicator">
+                        <i class="fas fa-circle"></i>
+                        <span>System Active</span>
+                    </div>
+                    <div class="current-time" id="current-time"></div>
+                </div>
+            </header>
+
+            <!-- Page Content -->
+            <main class="content">
+                {% block content %}{% endblock %}
+            </main>
+        </div>
+    </div>
+
+    <!-- Alert Banner -->
+    <div id="alert-banner" class="alert-banner hidden">
+        <div class="alert-content">
+            <i class="fas fa-exclamation-triangle"></i>
+            <span id="alert-message">Drowsiness Alert!</span>
+        </div>
+    </div>
+
+    <!-- Audio for alarm -->
+    <audio id="alarm-sound" preload="auto">
+        <source src="{{ url_for('static', filename='alarm.wav') }}" type="audio/wav">
+    </audio>
+
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+    {% block scripts %}{% endblock %}
+</body>
+</html>

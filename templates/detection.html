@@ -1,0 +1,449 @@
+{% extends "base.html" %}
+
+{% block title %}Live Detection - Driver Drowsiness Detection System{% endblock %}
+
+{% block page_title %}Live Drowsiness Detection{% endblock %}
+
+{% block content %}
+<div class="detection-container">
+    <div class="detection-main">
+        <div class="video-section">
+            <div class="video-container">
+                <!-- Audio for alarms -->
+                <audio id="alarm-sound" preload="auto">
+                    <source src="{{ url_for('static', filename='alarm.wav') }}" type="audio/wav">
+                </audio>
+                <audio id="gentle-alert-sound" preload="auto">
+                    <source src="{{ url_for('static', filename='gentle_alert.wav') }}" type="audio/wav">
+                </audio>
+                <img id="video-feed" src="{{ url_for('video_feed') }}" alt="Video Feed" class="video-feed">
+                <div class="video-overlay" id="video-overlay">
+                    <div class="detection-indicator" id="detection-indicator">
+                        <i class="fas fa-circle"></i>
+                        <span>Detecting...</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="video-controls">
+                <button id="start-btn" class="control-btn start-btn">
+                    <i class="fas fa-play"></i>
+                    Start Detection
+                </button>
+                <button id="stop-btn" class="control-btn stop-btn" disabled>
+                    <i class="fas fa-stop"></i>
+                    Stop Detection
+                </button>
+                <button id="test-alarm-btn" class="control-btn test-btn">
+                    <i class="fas fa-volume-up"></i>
+                    Test Alarm
+                </button>
+            </div>
+        </div>
+
+        <div class="status-panel">
+            <div class="status-card">
+                <h3><i class="fas fa-eye"></i> Eye Status</h3>
+                <div class="status-value" id="eye-status">--</div>
+                <div class="status-indicator-small" id="eye-indicator">
+                    <i class="fas fa-circle"></i>
+                </div>
+            </div>
+
+            <div class="status-card">
+                <h3><i class="fas fa-tachometer-alt"></i> Drowsiness Level</h3>
+                <div class="status-value" id="drowsiness-level">--</div>
+                <div class="progress-bar">
+                    <div class="progress-fill" id="drowsiness-progress"></div>
+                </div>
+            </div>
+
+            <div class="status-card">
+                <h3><i class="fas fa-clock"></i> Session Time</h3>
+                <div class="status-value" id="session-time">00:00:00</div>
+                <div class="session-info">
+                    <span id="session-alerts">0 alerts</span>
+                </div>
+            </div>
+
+            <div class="status-card">
+                <h3><i class="fas fa-chart-line"></i> EAR Value</h3>
+                <div class="status-value" id="ear-value">--</div>
+                <div class="ear-gauge">
+                    <div class="gauge-fill" id="ear-gauge"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="alert-section">
+        <div class="alert-panel" id="alert-panel">
+            <div class="alert-header">
+                <i class="fas fa-exclamation-triangle"></i>
+                <h3>Alert Status</h3>
+            </div>
+            <div class="alert-content">
+                <div class="alert-message" id="alert-message">
+                    <span class="alert-text">System monitoring...</span>
+                </div>
+                <div class="alert-actions">
+                    <button class="alert-btn" id="snooze-btn">
+                        <i class="fas fa-pause"></i>
+                        Snooze
+                    </button>
+                    <button class="alert-btn" id="acknowledge-btn">
+                        <i class="fas fa-check"></i>
+                        Acknowledge
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Alert Banner (hidden by default) -->
+    <div class="alert-banner hidden" id="alert-banner">
+        <div class="alert-banner-content">
+            <i class="fas fa-exclamation-triangle"></i>
+            <span>DROWSINESS ALERT!</span>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let detectionActive = false;
+let metricsInterval;
+let alarmCheckInterval;
+let sessionStartTime;
+let lastAlarmStatus = false;
+let audioContext = null;
+
+// Initialize audio context on first user interaction
+function initAudioContext() {
+    if (!audioContext) {
+        try {
+            audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            if (audioContext.state === 'suspended') {
+                audioContext.resume();
+            }
+            console.log('Audio context initialized');
+        } catch (e) {
+            console.log('Audio context initialization failed:', e);
+        }
+    }
+}
+
+// Test alarm sound function
+function testAlarmSound() {
+    initAudioContext();
+    const alarmSound = document.getElementById('alarm-sound');
+    alarmSound.volume = 1.0;
+    alarmSound.currentTime = 0;
+    
+    // Try playing the file first
+    alarmSound.play().then(() => {
+        console.log('Test alarm played successfully');
+    }).catch(e => {
+        console.log('Test alarm file failed, using fallback:', e);
+        playFallbackAlarm();
+    });
+}
+
+// Fallback alarm using Web Audio API
+function playFallbackAlarm() {
+    if (!audioContext) {
+        audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    
+    // Create a simple beep sound
+    const oscillator = audioContext.createOscillator();
+    const gainNode = audioContext.createGain();
+    
+    oscillator.connect(gainNode);
+    gainNode.connect(audioContext.destination);
+    
+    oscillator.frequency.value = 800; // 800 Hz beep
+    oscillator.type = 'square';
+    
+    gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+    gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
+    
+    oscillator.start(audioContext.currentTime);
+    oscillator.stop(audioContext.currentTime + 0.5);
+    
+    console.log('Playing fallback alarm sound');
+}
+
+// Start detection
+document.getElementById('start-btn').addEventListener('click', async function() {
+    // Initialize audio context on user interaction
+    initAudioContext();
+    
+    try {
+        const response = await fetch('/start_detection');
+        const data = await response.json();
+        
+        if (data.status === 'success') {
+            detectionActive = true;
+            sessionStartTime = Date.now();
+            
+            document.getElementById('start-btn').disabled = true;
+            document.getElementById('stop-btn').disabled = false;
+            document.getElementById('detection-indicator').classList.add('active');
+            
+            // Start updating metrics
+            metricsInterval = setInterval(updateMetrics, 1000);
+            alarmCheckInterval = setInterval(checkAlarmStatus, 200);
+            updateSessionTime();
+        }
+    } catch (error) {
+        console.error('Error starting detection:', error);
+    }
+});
+
+// Stop detection
+document.getElementById('stop-btn').addEventListener('click', async function() {
+    try {
+        const response = await fetch('/stop_detection');
+        const data = await response.json();
+        
+        if (data.status === 'success') {
+            detectionActive = false;
+            
+            document.getElementById('start-btn').disabled = false;
+            document.getElementById('stop-btn').disabled = true;
+            document.getElementById('detection-indicator').classList.remove('active');
+            
+            // Stop updating metrics
+            clearInterval(metricsInterval);
+            clearInterval(alarmCheckInterval);
+            
+            // Reset alarm tracking
+            lastAlarmStatus = false;
+            
+            // Reset displays
+            document.getElementById('eye-status').textContent = '--';
+            document.getElementById('drowsiness-level').textContent = '--';
+            document.getElementById('ear-value').textContent = '--';
+            document.getElementById('session-time').textContent = '00:00:00';
+            document.getElementById('session-alerts').textContent = '0 alerts';
+        }
+    } catch (error) {
+        console.error('Error stopping detection:', error);
+    }
+});
+
+// Update metrics
+async function updateMetrics() {
+    try {
+        const response = await fetch('/get_metrics');
+        const metrics = await response.json();
+        
+        // Update eye status
+        document.getElementById('eye-status').textContent = metrics.eye_status;
+        const eyeIndicator = document.getElementById('eye-indicator');
+        eyeIndicator.className = 'status-indicator-small ' + 
+            (metrics.eye_status === 'Open' ? 'status-normal' : 'status-warning');
+        
+        // Update drowsiness level
+        document.getElementById('drowsiness-level').textContent = metrics.status;
+        const progressFill = document.getElementById('drowsiness-progress');
+        const progressWidth = metrics.status === 'Normal' ? 25 : 
+                            metrics.status === 'Warning' ? 60 : 90;
+        progressFill.style.width = progressWidth + '%';
+        progressFill.className = 'progress-fill ' + 
+            (metrics.status === 'Normal' ? 'progress-normal' : 
+             metrics.status === 'Warning' ? 'progress-warning' : 'progress-danger');
+        
+        // Update alerts
+        document.getElementById('session-alerts').textContent = metrics.total_alerts + ' alerts';
+        
+        // Update alert panel
+        updateAlertPanel(metrics.status);
+        
+    } catch (error) {
+        console.error('Error updating metrics:', error);
+    }
+}
+
+// Update session time
+function updateSessionTime() {
+    if (!detectionActive) return;
+    
+    const elapsed = Date.now() - sessionStartTime;
+    const hours = Math.floor(elapsed / 3600000);
+    const minutes = Math.floor((elapsed % 3600000) / 60000);
+    const seconds = Math.floor((elapsed % 60000) / 1000);
+    
+    const timeString = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+    document.getElementById('session-time').textContent = timeString;
+    
+    if (detectionActive) {
+        requestAnimationFrame(updateSessionTime);
+    }
+}
+
+// Check alarm status more frequently for immediate response
+async function checkAlarmStatus() {
+    try {
+        const response = await fetch('/get_alarm_status');
+        const alarmData = await response.json();
+        
+        console.log('Alarm status check:', alarmData);
+        
+        // Trigger alarm immediately if status changed to alarm_on
+        if (alarmData.alarm_on && !lastAlarmStatus) {
+            console.log('ALARM TRIGGERED IN FRONTEND!');
+            playAlarm('critical');
+            showAlertBanner();
+            // Add visual alarm effect
+            document.body.classList.add('alarm-flashing');
+            setTimeout(() => {
+                document.body.classList.remove('alarm-flashing');
+            }, 1500);
+        }
+        
+        lastAlarmStatus = alarmData.alarm_on;
+        
+        // Update alert panel immediately
+        if (alarmData.status === 'Critical') {
+            const alertPanel = document.getElementById('alert-panel');
+            const alertText = document.querySelector('.alert-text');
+            alertPanel.className = 'alert-panel alert-critical';
+            alertText.textContent = 'DROWSINESS DETECTED! Please pay attention!';
+        } else if (alarmData.status === 'Warning') {
+            const alertPanel = document.getElementById('alert-panel');
+            const alertText = document.querySelector('.alert-text');
+            alertPanel.className = 'alert-panel alert-warning';
+            alertText.textContent = 'Warning: Signs of drowsiness detected';
+        }
+        
+    } catch (error) {
+        console.error('Error checking alarm status:', error);
+    }
+}
+
+// Update alert panel
+function updateAlertPanel(status) {
+    const alertPanel = document.getElementById('alert-panel');
+    const alertText = document.querySelector('.alert-text');
+    
+    if (status === 'Critical') {
+        alertPanel.className = 'alert-panel alert-critical';
+        alertText.textContent = 'DROWSINESS DETECTED! Please pay attention!';
+    } else if (status === 'Warning') {
+        alertPanel.className = 'alert-panel alert-warning';
+        alertText.textContent = 'Warning: Signs of drowsiness detected';
+    } else {
+        alertPanel.className = 'alert-panel alert-normal';
+        alertText.textContent = 'Driver appears alert and focused';
+    }
+}
+
+// Show alert banner
+function showAlertBanner() {
+    const banner = document.getElementById('alert-banner');
+    banner.classList.remove('hidden');
+    setTimeout(() => {
+        banner.classList.add('hidden');
+    }, 5000);
+}
+
+// Play alarm based on alert level
+function playAlarm(level) {
+    const alarmSound = document.getElementById('alarm-sound');
+    const gentleAlert = document.getElementById('gentle-alert-sound');
+    
+    // Stop any currently playing sounds
+    alarmSound.pause();
+    alarmSound.currentTime = 0;
+    gentleAlert.pause();
+    gentleAlert.currentTime = 0;
+    
+    // Set volume to maximum
+    alarmSound.volume = 1.0;
+    gentleAlert.volume = 1.0;
+    
+    // Ensure audio context is running
+    if (audioContext && audioContext.state === 'suspended') {
+        audioContext.resume();
+    }
+    
+    if (level === 'critical') {
+        // Try to play the alarm sound
+        alarmSound.play().then(() => {
+            console.log('Critical alarm playing successfully');
+        }).catch(e => {
+            console.log('Critical alarm play failed, using fallback:', e);
+            // Use fallback alarm
+            playFallbackAlarm();
+            // Repeat the fallback alarm
+            setTimeout(() => playFallbackAlarm(), 600);
+            setTimeout(() => playFallbackAlarm(), 1200);
+        });
+    } else if (level === 'warning') {
+        gentleAlert.play().then(() => {
+            console.log('Warning alert playing successfully');
+        }).catch(e => {
+            console.log('Warning alert play failed, using fallback:', e);
+            // Use a softer fallback for warning
+            playFallbackWarning();
+        });
+    }
+}
+
+// Fallback warning sound (softer)
+function playFallbackWarning() {
+    if (!audioContext) {
+        audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    
+    const oscillator = audioContext.createOscillator();
+    const gainNode = audioContext.createGain();
+    
+    oscillator.connect(gainNode);
+    gainNode.connect(audioContext.destination);
+    
+    oscillator.frequency.value = 400; // Lower frequency for warning
+    oscillator.type = 'sine'; // Softer wave type
+    
+    gainNode.gain.setValueAtTime(0.2, audioContext.currentTime);
+    gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3);
+    
+    oscillator.start(audioContext.currentTime);
+    oscillator.stop(audioContext.currentTime + 0.3);
+    
+    console.log('Playing fallback warning sound');
+}
+
+// Snooze button
+document.getElementById('snooze-btn').addEventListener('click', function() {
+    const alarmSound = document.getElementById('alarm-sound');
+    const gentleAlert = document.getElementById('gentle-alert-sound');
+    
+    alarmSound.pause();
+    alarmSound.currentTime = 0;
+    gentleAlert.pause();
+    gentleAlert.currentTime = 0;
+});
+
+// Acknowledge button
+document.getElementById('acknowledge-btn').addEventListener('click', function() {
+    const alarmSound = document.getElementById('alarm-sound');
+    const gentleAlert = document.getElementById('gentle-alert-sound');
+    
+    alarmSound.pause();
+    alarmSound.currentTime = 0;
+    gentleAlert.pause();
+    gentleAlert.currentTime = 0;
+    
+    document.getElementById('alert-banner').classList.add('hidden');
+});
+
+// Test alarm button
+document.getElementById('test-alarm-btn').addEventListener('click', function() {
+    testAlarmSound();
+});
+</script>
+{% endblock %}

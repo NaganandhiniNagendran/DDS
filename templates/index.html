@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+
+{% block title %}Home - Driver Drowsiness Detection System{% endblock %}
+
+{% block content %}
+<div class="home-container">
+    <div class="hero-section">
+        <div class="hero-content">
+            <div class="hero-icon">
+                <i class="fas fa-shield-alt"></i>
+            </div>
+            <h1>Driver Drowsiness Detection System</h1>
+            <p class="hero-description">
+                Advanced AI-powered system to prevent accidents caused by driver fatigue. 
+                Real-time monitoring of eye closure and yawning patterns to keep drivers safe on the road.
+            </p>
+            <div class="hero-features">
+                <div class="feature-item">
+                    <i class="fas fa-eye"></i>
+                    <span>Eye Tracking</span>
+                </div>
+                <div class="feature-item">
+                    <i class="fas fa-brain"></i>
+                    <span>AI Detection</span>
+                </div>
+                <div class="feature-item">
+                    <i class="fas fa-bell"></i>
+                    <span>Instant Alerts</span>
+                </div>
+            </div>
+            <a href="/detection" class="start-btn">
+                <i class="fas fa-play"></i>
+                Start Detection
+            </a>
+        </div>
+        <div class="hero-illustration">
+            <div class="illustration-card">
+                <i class="fas fa-car-side"></i>
+                <div class="pulse-ring"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="info-section">
+        <div class="info-grid">
+            <div class="info-card">
+                <div class="info-icon">
+                    <i class="fas fa-chart-line"></i>
+                </div>
+                <h3>Real-time Analysis</h3>
+                <p>Continuous monitoring using advanced computer vision algorithms to detect signs of drowsiness instantly.</p>
+            </div>
+            <div class="info-card">
+                <div class="info-icon">
+                    <i class="fas fa-volume-up"></i>
+                </div>
+                <h3>Audio Alerts</h3>
+                <p>Immediate alarm notifications when dangerous drowsiness patterns are detected, ensuring driver attention.</p>
+            </div>
+            <div class="info-card">
+                <div class="info-icon">
+                    <i class="fas fa-database"></i>
+                </div>
+                <h3>Session Tracking</h3>
+                <p>Comprehensive logging of driving sessions with detailed fatigue analysis and alert history.</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="stats-section">
+        <div class="stats-grid">
+            <div class="stat-item">
+                <div class="stat-number" id="total-sessions">0</div>
+                <div class="stat-label">Total Sessions</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-number" id="alerts-prevented">0</div>
+                <div class="stat-label">Alerts Prevented</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-number" id="active-time">0h</div>
+                <div class="stat-label">Active Time</div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Load and display statistics
+async function loadStats() {
+    try {
+        const response = await fetch('/get_sessions');
+        const sessions = await response.json();
+        
+        const totalSessions = Object.keys(sessions).length;
+        const totalAlerts = Object.values(sessions).reduce((sum, session) => sum + session.alerts, 0);
+        
+        document.getElementById('total-sessions').textContent = totalSessions;
+        document.getElementById('alerts-prevented').textContent = totalAlerts;
+    } catch (error) {
+        console.error('Error loading stats:', error);
+    }
+}
+
+// Load stats on page load
+document.addEventListener('DOMContentLoaded', loadStats);
+</script>
+{% endblock %}

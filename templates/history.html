@@ -1,0 +1,397 @@
+{% extends "base.html" %}
+
+{% block title %}History - Driver Drowsiness Detection System{% endblock %}
+
+{% block page_title %}Session History{% endblock %}
+
+{% block content %}
+<div class="history-container">
+    <!-- Filters Section -->
+    <div class="filters-section">
+        <div class="filters-card">
+            <div class="filters-header">
+                <h3><i class="fas fa-filter"></i> Filter Sessions</h3>
+            </div>
+            <div class="filters-content">
+                <div class="filter-group">
+                    <label for="date-filter">Date Range</label>
+                    <div class="date-inputs">
+                        <input type="date" id="start-date" class="date-input">
+                        <span>to</span>
+                        <input type="date" id="end-date" class="date-input">
+                    </div>
+                </div>
+                <div class="filter-group">
+                    <label for="alert-filter">Alerts</label>
+                    <select id="alert-filter" class="filter-select">
+                        <option value="all">All Sessions</option>
+                        <option value="with-alerts">With Alerts</option>
+                        <option value="no-alerts">No Alerts</option>
+                    </select>
+                </div>
+                <div class="filter-actions">
+                    <button class="filter-btn apply-btn">
+                        <i class="fas fa-check"></i>
+                        Apply
+                    </button>
+                    <button class="filter-btn reset-btn">
+                        <i class="fas fa-undo"></i>
+                        Reset
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Statistics Summary -->
+    <div class="stats-summary">
+        <div class="summary-card">
+            <div class="summary-icon">
+                <i class="fas fa-calendar-alt"></i>
+            </div>
+            <div class="summary-content">
+                <div class="summary-value" id="total-sessions">0</div>
+                <div class="summary-label">Total Sessions</div>
+            </div>
+        </div>
+        <div class="summary-card">
+            <div class="summary-icon">
+                <i class="fas fa-clock"></i>
+            </div>
+            <div class="summary-content">
+                <div class="summary-value" id="total-time">0h 0m</div>
+                <div class="summary-label">Total Time</div>
+            </div>
+        </div>
+        <div class="summary-card">
+            <div class="summary-icon">
+                <i class="fas fa-bell"></i>
+            </div>
+            <div class="summary-content">
+                <div class="summary-value" id="total-alerts">0</div>
+                <div class="summary-label">Total Alerts</div>
+            </div>
+        </div>
+        <div class="summary-card">
+            <div class="summary-icon">
+                <i class="fas fa-percentage"></i>
+            </div>
+            <div class="summary-content">
+                <div class="summary-value" id="alert-rate">0%</div>
+                <div class="summary-label">Alert Rate</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Sessions Table -->
+    <div class="table-section">
+        <div class="table-card">
+            <div class="table-header">
+                <h3><i class="fas fa-list"></i> Session History</h3>
+                <div class="table-actions">
+                    <button class="export-btn">
+                        <i class="fas fa-download"></i>
+                        Export CSV
+                    </button>
+                </div>
+            </div>
+            <div class="table-container">
+                <table class="sessions-table">
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Time</th>
+                            <th>Duration</th>
+                            <th>Alerts</th>
+                            <th>Fatigue Level</th>
+                            <th>Status</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="sessions-tbody">
+                        <!-- Sessions will be loaded here -->
+                    </tbody>
+                </table>
+                <div class="no-data" id="no-data" style="display: none;">
+                    <i class="fas fa-inbox"></i>
+                    <p>No session data available</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Pagination -->
+    <div class="pagination-section">
+        <div class="pagination-controls">
+            <button class="page-btn" id="prev-page">
+                <i class="fas fa-chevron-left"></i>
+            </button>
+            <div class="page-numbers" id="page-numbers">
+                <!-- Page numbers will be generated here -->
+            </div>
+            <button class="page-btn" id="next-page">
+                <i class="fas fa-chevron-right"></i>
+            </button>
+        </div>
+        <div class="pagination-info">
+            <span id="pagination-info">Showing 0 of 0 sessions</span>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let allSessions = [];
+let filteredSessions = [];
+let currentPage = 1;
+const sessionsPerPage = 10;
+
+// Load session data
+async function loadSessions() {
+    try {
+        const response = await fetch('/get_sessions');
+        allSessions = Object.entries(response.data || await response.json()).map(([id, session]) => ({
+            id,
+            ...session
+        }));
+        
+        filteredSessions = [...allSessions];
+        updateSummary();
+        renderTable();
+        updatePagination();
+    } catch (error) {
+        console.error('Error loading sessions:', error);
+        document.getElementById('no-data').style.display = 'block';
+        document.querySelector('.table-container table').style.display = 'none';
+    }
+}
+
+// Update summary statistics
+function updateSummary() {
+    const totalSessions = filteredSessions.length;
+    const totalDuration = filteredSessions.reduce((sum, session) => sum + session.duration, 0);
+    const totalAlerts = filteredSessions.reduce((sum, session) => sum + session.alerts, 0);
+    const alertRate = totalSessions > 0 ? Math.round((totalAlerts / totalSessions) * 100) : 0;
+    
+    document.getElementById('total-sessions').textContent = totalSessions;
+    document.getElementById('total-alerts').textContent = totalAlerts;
+    document.getElementById('alert-rate').textContent = alertRate + '%';
+    
+    // Format duration
+    const hours = Math.floor(totalDuration / 3600);
+    const minutes = Math.floor((totalDuration % 3600) / 60);
+    document.getElementById('total-time').textContent = `${hours}h ${minutes}m`;
+}
+
+// Render sessions table
+function renderTable() {
+    const tbody = document.getElementById('sessions-tbody');
+    const startIndex = (currentPage - 1) * sessionsPerPage;
+    const endIndex = startIndex + sessionsPerPage;
+    const pageSessions = filteredSessions.slice(startIndex, endIndex);
+    
+    if (pageSessions.length === 0) {
+        document.getElementById('no-data').style.display = 'block';
+        tbody.parentElement.style.display = 'none';
+        return;
+    }
+    
+    document.getElementById('no-data').style.display = 'none';
+    tbody.parentElement.style.display = 'table';
+    
+    tbody.innerHTML = pageSessions.map(session => {
+        const duration = formatDuration(session.duration);
+        const fatigueClass = getFatigueClass(session.fatigue_level);
+        const statusIcon = session.alerts > 0 ? 'exclamation-triangle' : 'check-circle';
+        const statusClass = session.alerts > 0 ? 'status-warning' : 'status-success';
+        
+        return `
+            <tr>
+                <td>${session.date}</td>
+                <td>${session.time}</td>
+                <td>${duration}</td>
+                <td>
+                    <span class="alert-count ${session.alerts > 0 ? 'has-alerts' : ''}">
+                        ${session.alerts}
+                    </span>
+                </td>
+                <td>
+                    <span class="fatigue-level ${fatigueClass}">
+                        ${session.fatigue_level}
+                    </span>
+                </td>
+                <td>
+                    <span class="status-indicator ${statusClass}">
+                        <i class="fas fa-${statusIcon}"></i>
+                    </span>
+                </td>
+                <td>
+                    <button class="action-btn view-btn" onclick="viewSession('${session.id}')">
+                        <i class="fas fa-eye"></i>
+                    </button>
+                    <button class="action-btn delete-btn" onclick="deleteSession('${session.id}')">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </td>
+            </tr>
+        `;
+    }).join('');
+}
+
+// Format duration
+function formatDuration(seconds) {
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    const secs = seconds % 60;
+    
+    if (hours > 0) {
+        return `${hours}h ${minutes}m ${secs}s`;
+    } else if (minutes > 0) {
+        return `${minutes}m ${secs}s`;
+    } else {
+        return `${secs}s`;
+    }
+}
+
+// Get fatigue level class
+function getFatigueClass(level) {
+    switch (level) {
+        case 'Critical': return 'fatigue-critical';
+        case 'Warning': return 'fatigue-warning';
+        default: return 'fatigue-normal';
+    }
+}
+
+// Update pagination
+function updatePagination() {
+    const totalPages = Math.ceil(filteredSessions.length / sessionsPerPage);
+    const pageNumbers = document.getElementById('page-numbers');
+    
+    let paginationHTML = '';
+    for (let i = 1; i <= totalPages; i++) {
+        paginationHTML += `
+            <button class="page-number ${i === currentPage ? 'active' : ''}" 
+                    onclick="goToPage(${i})">${i}</button>
+        `;
+    }
+    pageNumbers.innerHTML = paginationHTML;
+    
+    // Update pagination info
+    const startIndex = (currentPage - 1) * sessionsPerPage + 1;
+    const endIndex = Math.min(currentPage * sessionsPerPage, filteredSessions.length);
+    document.getElementById('pagination-info').textContent = 
+        `Showing ${startIndex}-${endIndex} of ${filteredSessions.length} sessions`;
+    
+    // Update prev/next buttons
+    document.getElementById('prev-page').disabled = currentPage === 1;
+    document.getElementById('next-page').disabled = currentPage === totalPages;
+}
+
+// Go to page
+function goToPage(page) {
+    currentPage = page;
+    renderTable();
+    updatePagination();
+}
+
+// View session details
+function viewSession(sessionId) {
+    const session = allSessions.find(s => s.id === sessionId);
+    if (session) {
+        alert(`Session Details:\n\nDate: ${session.date}\nTime: ${session.time}\nDuration: ${formatDuration(session.duration)}\nAlerts: ${session.alerts}\nFatigue Level: ${session.fatigue_level}`);
+    }
+}
+
+// Delete session
+function deleteSession(sessionId) {
+    if (confirm('Are you sure you want to delete this session?')) {
+        // In a real application, this would make an API call to delete the session
+        allSessions = allSessions.filter(s => s.id !== sessionId);
+        filteredSessions = filteredSessions.filter(s => s.id !== sessionId);
+        updateSummary();
+        renderTable();
+        updatePagination();
+    }
+}
+
+// Filter functionality
+document.querySelector('.apply-btn').addEventListener('click', function() {
+    const startDate = document.getElementById('start-date').value;
+    const endDate = document.getElementById('end-date').value;
+    const alertFilter = document.getElementById('alert-filter').value;
+    
+    filteredSessions = allSessions.filter(session => {
+        let dateMatch = true;
+        let alertMatch = true;
+        
+        if (startDate) {
+            dateMatch = dateMatch && session.date >= startDate;
+        }
+        if (endDate) {
+            dateMatch = dateMatch && session.date <= endDate;
+        }
+        
+        if (alertFilter === 'with-alerts') {
+            alertMatch = session.alerts > 0;
+        } else if (alertFilter === 'no-alerts') {
+            alertMatch = session.alerts === 0;
+        }
+        
+        return dateMatch && alertMatch;
+    });
+    
+    currentPage = 1;
+    updateSummary();
+    renderTable();
+    updatePagination();
+});
+
+// Reset filters
+document.querySelector('.reset-btn').addEventListener('click', function() {
+    document.getElementById('start-date').value = '';
+    document.getElementById('end-date').value = '';
+    document.getElementById('alert-filter').value = 'all';
+    
+    filteredSessions = [...allSessions];
+    currentPage = 1;
+    updateSummary();
+    renderTable();
+    updatePagination();
+});
+
+// Export CSV
+document.querySelector('.export-btn').addEventListener('click', function() {
+    let csv = 'Date,Time,Duration,Alerts,Fatigue Level\n';
+    
+    filteredSessions.forEach(session => {
+        csv += `${session.date},${session.time},${formatDuration(session.duration)},${session.alerts},${session.fatigue_level}\n`;
+    });
+    
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `session_history_${new Date().toISOString().split('T')[0]}.csv`;
+    a.click();
+    window.URL.revokeObjectURL(url);
+});
+
+// Pagination controls
+document.getElementById('prev-page').addEventListener('click', function() {
+    if (currentPage > 1) {
+        goToPage(currentPage - 1);
+    }
+});
+
+document.getElementById('next-page').addEventListener('click', function() {
+    const totalPages = Math.ceil(filteredSessions.length / sessionsPerPage);
+    if (currentPage < totalPages) {
+        goToPage(currentPage + 1);
+    }
+});
+
+// Load data on page load
+document.addEventListener('DOMContentLoaded', loadSessions);
+</script>
+{% endblock %}
